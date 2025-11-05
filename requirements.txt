@@ -1,0 +1,15 @@
+# Python dependencies for Direct P2P Mesh Chat
+
+# For Bluetooth support (choose based on platform)
+# Windows: Install this one
+pybluez; sys_platform == 'win32'
+
+# Mac: Try pybluez2 first, fallback to bleak if it fails
+# pybluez2; sys_platform == 'darwin'
+# bleak; sys_platform == 'darwin'
+
+# Linux: Standard pybluez
+pybluez; sys_platform == 'linux'
+
+# Alternative: Use bleak for BLE on all platforms (if RFCOMM fails)
+# bleak>=0.20.0

@@ -1,0 +1,234 @@
+=========================================
+WiFi Direct P2P Setup for Termux
+=========================================
+
+This version ATTEMPTS to use WiFi Direct (P2P) on Android.
+Falls back to standard WiFi if P2P is unavailable.
+
+=========================================
+PREREQUISITES
+=========================================
+
+1. Android 4.0+ (WiFi Direct support)
+2. Termux installed
+3. Root access (OPTIONAL - for full P2P control)
+4. Termux-API (OPTIONAL - for better WiFi control)
+
+=========================================
+INSTALLATION
+=========================================
+
+On each Android phone:
+
+1. Install Termux from F-Droid or Play Store
+
+2. Open Termux and run:
+   pkg update && pkg upgrade -y
+   pkg install python git termux-api -y
+
+3. Install Termux:API app from Play Store
+   (Companion app for termux-api package)
+
+4. Clone repository:
+   cd ~
+   git clone https://github.com/Muneeb50702/B2B_Communication.git
+   cd B2B_Communication
+
+5. Grant storage permission (if needed):
+   termux-setup-storage
+
+=========================================
+TESTING WiFi Direct CAPABILITY
+=========================================
+
+Before running the app, test if WiFi Direct is available:
+
+1. Check for P2P interface:
+   ip addr | grep p2p
+
+   Expected output (if available):
+   - p2p-wlan0 or p2p0 interface listed
+
+2. Check if wpa_cli is available:
+   which wpa_cli
+
+   If found, try:
+   wpa_cli p2p_find
+
+   Expected: "OK" or permission error
+
+3. Test Termux-API:
+   termux-wifi-connectioninfo
+
+   Should show JSON with WiFi details
+
+=========================================
+RUNNING THE APP
+=========================================
+
+METHOD 1: WiFi Direct Mode (if available)
+------------------------------------------
+1. On Phone A:
+   python wifi_direct_termux.py
+
+2. On Phone B:
+   python wifi_direct_termux.py
+
+3. The app will:
+   - Try to detect P2P interface
+   - Attempt WiFi Direct discovery
+   - Fall back to standard WiFi if P2P fails
+
+4. Watch the startup output:
+   ✓ Found WiFi Direct interface: p2p0
+   ✓ Using IP: 192.168.49.1
+
+METHOD 2: Standard WiFi Fallback
+----------------------------------
+If WiFi Direct fails, use standard WiFi:
+
+1. Phone A: Create WiFi hotspot (manually via Settings)
+2. Phone B: Connect to Phone A's hotspot
+3. Both phones: python wifi_direct_termux.py
+
+=========================================
+USAGE COMMANDS
+=========================================
+
+After starting the app:
+
+/list
+    - Show all connected peers
+    - Example: Alice, Bob, Charlie
+
+/send <username> <message>
+    - Send message to specific user
+    - Example: /send Bob Hello there!
+
+/send ALL <message>
+    - Broadcast to all peers
+    - Example: /send ALL Hey everyone!
+
+/peers
+    - Show detailed peer info (IPs, node IDs, connection age)
+
+/quit
+    - Exit the application
+
+=========================================
+WHAT TO EXPECT
+=========================================
+
+✓ WITH WiFi Direct:
+   - Devices discover each other automatically
+   - No hotspot needed (true P2P)
+   - 100m+ range
+   - Multi-hop routing (A→B→C)
+
+✗ WITHOUT WiFi Direct (fallback):
+   - Need manual hotspot setup
+   - 30-50m range limitation
+   - All devices must be on same network
+   - Still supports multi-hop routing
+
+=========================================
+TROUBLESHOOTING
+=========================================
+
+Issue: "No WiFi Direct interface found"
+Solution: 
+   - Your device may not support P2P interface exposure to userspace
+   - App will automatically fall back to standard WiFi
+   - Create hotspot manually and continue
+
+Issue: "Permission denied" for wpa_cli
+Solution:
+   - WiFi Direct requires system-level access
+   - App falls back to standard WiFi
+   - Consider rooting device for full P2P access
+
+Issue: "No peers connected"
+Solution:
+   - Ensure all phones are on same WiFi network
+   - Check firewall/network isolation
+   - Try: ip addr (verify IP addresses)
+   - Try: ping <other_phone_ip>
+
+Issue: termux-wifi-connectioninfo not found
+Solution:
+   - Install: pkg install termux-api
+   - Install Termux:API app from Play Store
+   - Both are required
+
+=========================================
+TESTING SCENARIOS
+=========================================
+
+Test 1: Auto-Discovery
+-----------------------
+1. Start app on Phone A
+2. Start app on Phone B (wait 10 seconds)
+3. On both phones: /list
+4. Should see each other
+
+Test 2: Messaging
+------------------
+1. On Phone A: /send Bob Hello!
+2. Phone B should receive: "Alice: Hello!"
+
+Test 3: Multi-Hop (requires 3 phones)
+--------------------------------------
+1. Place Phone C far from Phone A
+2. Place Phone B between A and C
+3. On Phone A: /send Charlie Test message
+4. Message routes: A → B → B → C
+
+Test 4: Broadcast
+------------------
+1. On any phone: /send ALL Group message
+2. All other phones receive it
+
+=========================================
+DIFFERENCES FROM mesh_chat_termux.py
+=========================================
+
+wifi_direct_termux.py:
+   - Attempts WiFi Direct detection
+   - Uses wpa_cli for P2P discovery
+   - Falls back to standard WiFi
+   - More detailed peer information
+
+mesh_chat_termux.py:
+   - Standard WiFi only
+   - Simpler implementation
+   - More stable (no experimental features)
+
+=========================================
+ROOT ACCESS (OPTIONAL)
+=========================================
+
+If you have rooted phone, you can enable full WiFi Direct:
+
+1. Install Magisk/SuperSU
+2. Grant Termux root access:
+   su
+
+3. Enable P2P:
+   wpa_cli -i wlan0 p2p_find
+   wpa_cli -i wlan0 p2p_listen
+
+4. Run app with root:
+   su -c "python wifi_direct_termux.py"
+
+WARNING: Rooting voids warranty and can brick your phone!
+
+=========================================
+NEXT STEPS
+=========================================
+
+If WiFi Direct doesn't work in Termux:
+   → Use mesh_chat_termux.py (proven to work)
+   → Build native Android app (proper WiFi Direct support)
+   → Android app has full WifiP2pManager API access
+
+=========================================

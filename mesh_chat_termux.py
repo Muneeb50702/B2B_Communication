@@ -28,14 +28,48 @@ class MeshNode:
         self._lock = threading.Lock()
     
     def _get_local_ip(self) -> str:
+        """Get the actual network IP address"""
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
+            # Try multiple methods to get real IP
+            
+            # Method 1: Try connecting to external IP (works when internet available)
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                if ip and ip != "127.0.0.1":
+                    return ip
+            except:
+                pass
+            
+            # Method 2: Get all network interfaces and find non-localhost IP
+            import subprocess
+            result = subprocess.run(['ip', 'addr'], capture_output=True, text=True)
+            lines = result.stdout.split('\n')
+            
+            for line in lines:
+                # Look for inet addresses (IPv4)
+                if 'inet ' in line and '127.0.0.1' not in line:
+                    # Extract IP address
+                    parts = line.strip().split()
+                    for i, part in enumerate(parts):
+                        if part == 'inet' and i + 1 < len(parts):
+                            ip = parts[i + 1].split('/')[0]
+                            # Prefer 192.168.x.x or 10.x.x.x (common hotspot ranges)
+                            if ip.startswith(('192.168.', '10.', '172.')):
+                                return ip
+            
+            # Method 3: Fallback to hostname
+            hostname = socket.gethostname()
+            ip = socket.gethostbyname(hostname)
+            if ip and ip != "127.0.0.1":
+                return ip
+                
         except:
-            return "127.0.0.1"
+            pass
+        
+        return "0.0.0.0"  # Bind to all interfaces if we can't determine IP
     
     def start(self) -> bool:
         try:
@@ -88,9 +122,7 @@ class MeshNode:
             try:
                 data, addr = self.sock.recvfrom(8192)
                 
-                if addr[0] == self.local_ip:
-                    continue
-                
+                # Don't skip based on IP - let packet handling determine if it's our own
                 packet = json.loads(data.decode('utf-8'))
                 self._handle_packet(packet)
             except socket.timeout:
@@ -188,7 +220,11 @@ def main():
         print("Failed to start! Check network connection.")
         sys.exit(1)
     
-    print(f"✓ Running on {node.local_ip}:{node.udp_port}")
+    # Display IP info
+    if node.local_ip == "0.0.0.0":
+        print(f"✓ Listening on all interfaces:{node.udp_port}")
+    else:
+        print(f"✓ Running on {node.local_ip}:{node.udp_port}")
     print("✓ Searching for nearby devices...\n")
     
     print("Commands:")

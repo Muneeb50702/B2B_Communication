@@ -32,21 +32,13 @@ class MeshNode:
         try:
             # Try multiple methods to get real IP
             
-            # Method 1: Try connecting to external IP (works when internet available)
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect(("8.8.8.8", 80))
-                ip = s.getsockname()[0]
-                s.close()
-                if ip and ip != "127.0.0.1":
-                    return ip
-            except:
-                pass
-            
-            # Method 2: Get all network interfaces and find non-localhost IP
+            # Method 1: Parse ip addr output for any valid network IP
             import subprocess
             result = subprocess.run(['ip', 'addr'], capture_output=True, text=True)
             lines = result.stdout.split('\n')
+            
+            # Collect all potential IPs
+            potential_ips = []
             
             for line in lines:
                 # Look for inet addresses (IPv4)
@@ -56,9 +48,24 @@ class MeshNode:
                     for i, part in enumerate(parts):
                         if part == 'inet' and i + 1 < len(parts):
                             ip = parts[i + 1].split('/')[0]
-                            # Prefer 192.168.x.x or 10.x.x.x (common hotspot ranges)
+                            # Collect valid private network IPs
                             if ip.startswith(('192.168.', '10.', '172.')):
-                                return ip
+                                potential_ips.append(ip)
+            
+            # Return first valid IP found
+            if potential_ips:
+                return potential_ips[0]
+            
+            # Method 2: Try connecting to external IP (works when internet available)
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                if ip and ip != "127.0.0.1":
+                    return ip
+            except:
+                pass
             
             # Method 3: Fallback to hostname
             hostname = socket.gethostname()
@@ -112,9 +119,11 @@ class MeshNode:
         
         try:
             data = json.dumps(packet).encode('utf-8')
-            self.sock.sendto(data, ('<broadcast>', self.udp_port))
+            # Broadcast to all
+            self.sock.sendto(data, ('255.255.255.255', self.udp_port))
             return True
-        except:
+        except Exception as e:
+            # Silent fail - likely network issue
             return False
     
     def _receive_loop(self):
@@ -168,7 +177,7 @@ class MeshNode:
                 packet["ttl"] = ttl - 1
                 data = json.dumps(packet).encode('utf-8')
                 try:
-                    self.sock.sendto(data, ('<broadcast>', self.udp_port))
+                    self.sock.sendto(data, ('255.255.255.255', self.udp_port))
                 except:
                     pass
     
@@ -182,7 +191,8 @@ class MeshNode:
             }
             try:
                 data = json.dumps(packet).encode('utf-8')
-                self.sock.sendto(data, ('<broadcast>', self.udp_port))
+                # Use explicit broadcast address
+                self.sock.sendto(data, ('255.255.255.255', self.udp_port))
             except:
                 pass
             time.sleep(3)

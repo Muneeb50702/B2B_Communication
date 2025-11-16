@@ -9,7 +9,7 @@ export class UDPDiscovery {
   private isListening: boolean = false;
   private discoveryCallbacks: Set<DiscoveryCallback> = new Set();
   private currentUser: User | null = null;
-  private broadcastInterval: NodeJS.Timeout | null = null;
+  private broadcastInterval: any = null;
 
   async initialize(user: User) {
     this.currentUser = user;
@@ -18,7 +18,6 @@ export class UDPDiscovery {
       // Create UDP socket
       this.socket = dgram.createSocket({
         type: 'udp4',
-        reuseAddr: true,
         reusePort: true,
       });
 

@@ -19,8 +19,8 @@ export class WiFiHelper {
     try {
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.ACCESS_WIFI_STATE,
-        PermissionsAndroid.PERMISSIONS.CHANGE_WIFI_STATE,
+        'android.permission.ACCESS_WIFI_STATE' as any,
+        'android.permission.CHANGE_WIFI_STATE' as any,
       ]);
 
       return (
@@ -71,7 +71,7 @@ export class WiFiHelper {
       }
 
       console.log('[WiFi] Connecting to:', ssid);
-      await WifiManager.connectToProtectedSSID(ssid, password, false);
+      await WifiManager.connectToProtectedSSID(ssid, password, false, false);
       
       // Wait a bit for connection to establish
       await new Promise(resolve => setTimeout(resolve, 3000));

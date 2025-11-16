@@ -108,7 +108,6 @@ export class TCPMessaging {
           {
             port: NETWORK_CONFIG.TCP_MESSAGE_PORT,
             host: user.ipAddress,
-            timeout: 5000,
           },
           () => {
             console.log('[TCP] Connected to', user.username, 'at', user.ipAddress);

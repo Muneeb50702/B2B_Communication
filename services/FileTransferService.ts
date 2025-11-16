@@ -179,7 +179,7 @@ export class FileTransferService {
       }
 
       const fileStat = await RNFS.stat(fileUri);
-      const fileSize = parseInt(fileStat.size);
+      const fileSize = Number(fileStat.size);
 
       // Create transfer record
       const transferId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -202,7 +202,6 @@ export class FileTransferService {
           {
             port: NETWORK_CONFIG.TCP_FILE_PORT,
             host: toUser.ipAddress,
-            timeout: 10000,
           },
           () => {
             console.log('[FileTransfer] Connected to', toUser.username);

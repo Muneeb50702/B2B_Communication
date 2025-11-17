@@ -360,7 +360,7 @@ class TCPMessagingService {
 
     // Close server
     if (this.server) {
-      this.server.destroy();
+      this.server.close();
       this.server = null;
     }
 

@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Users, MessageCircle, Settings } from "lucide-react-native";
 import React from "react";
 import { theme } from "@/constants/theme";
@@ -22,9 +22,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{
-          href: null,
-        }}
+        options={{ headerShown: false, tabBarButton: () => null }}
       />
       <Tabs.Screen
         name="users"

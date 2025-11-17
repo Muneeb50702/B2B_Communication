@@ -27,12 +27,33 @@ class WiFiManagerService {
     }
 
     try {
-      const granted = await PermissionsAndroid.requestMultiple([
+      // Check if PermissionsAndroid is available
+      if (!PermissionsAndroid || !PermissionsAndroid.requestMultiple) {
+        console.warn('[WiFiManager] PermissionsAndroid API not available');
+        return true; // Continue anyway on web/unsupported platforms
+      }
+
+      const requested = [
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        // Android 13+ nearby wifi; may be undefined on older APIs
+        // @ts-ignore
+        PermissionsAndroid.PERMISSIONS.NEARBY_WIFI_DEVICES,
         PermissionsAndroid.PERMISSIONS.ACCESS_WIFI_STATE,
         PermissionsAndroid.PERMISSIONS.CHANGE_WIFI_STATE,
         PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE,
-      ]);
+      ].filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+      if (requested.length === 0) {
+        console.warn('[WiFiManager] No permissions to request');
+        return true;
+      }
+
+      const granted = await PermissionsAndroid.requestMultiple(requested);
+
+      if (!granted) {
+        console.warn('[WiFiManager] Permission result is null');
+        return true; // Continue anyway
+      }
 
       const allGranted = Object.values(granted).every(
         permission => permission === PermissionsAndroid.RESULTS.GRANTED
@@ -42,7 +63,7 @@ class WiFiManagerService {
       return allGranted;
     } catch (error) {
       console.error('[WiFiManager] Permission request failed:', error);
-      return false;
+      return true; // Continue anyway - permissions might be granted already
     }
   }
 

@@ -56,9 +56,14 @@ class NetworkService {
       // Step 1: Setup WiFi (if host)
       if (this.isHost) {
         console.log('[NetworkService] Setting up WiFi hotspot...');
-        const wifiReady = await WiFiManager.requestPermissions();
-        if (!wifiReady) {
-          console.warn('[NetworkService] WiFi permissions failed - continuing anyway');
+        try {
+          const wifiReady = await WiFiManager.requestPermissions();
+          if (!wifiReady) {
+            console.warn('[NetworkService] WiFi permissions failed - continuing anyway');
+          }
+        } catch (error) {
+          console.error('[NetworkService] WiFi setup error:', error);
+          console.log('[NetworkService] Continuing without WiFi hotspot');
         }
       }
 

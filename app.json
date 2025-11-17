@@ -22,21 +22,23 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.b2bcomm.app",
+      "versionCode": 1,
       "permissions": [
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_STATE",
+        "CHANGE_NETWORK_STATE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "INTERNET",
         "CAMERA",
-        "android.permission.NEARBY_WIFI_DEVICES",
-        "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_STATE",
-        "android.permission.CHANGE_NETWORK_STATE",
-        "android.permission.WRITE_SETTINGS"
-      ]
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "WRITE_SETTINGS",
+        "android.permission.NEARBY_WIFI_DEVICES"
+      ],
+      "blockedPermissions": [],
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -49,7 +51,8 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access camera for QR code scanning"
         }
-      ]
+      ],
+      "./app.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true

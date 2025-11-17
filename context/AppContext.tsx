@@ -33,17 +33,52 @@ export const [AppProvider, useApp] = createContextHook(() => {
 
   useEffect(() => {
     if (currentUser && isInitialized) {
-      NetworkService.initialize(currentUser, isHost);
-      NetworkService.startDiscovery();
-
-      const unsubscribe = NetworkService.onMessage(handleNetworkPacket);
+      initializeNetworking();
 
       return () => {
-        unsubscribe();
         NetworkService.shutdown();
       };
     }
   }, [currentUser, isHost, isInitialized]);
+
+  const initializeNetworking = async () => {
+    if (!currentUser) return;
+
+    console.log("[AppContext] Initializing networking...");
+    
+    // Initialize NetworkService
+    const success = await NetworkService.initialize(currentUser, isHost);
+    
+    if (!success) {
+      console.error("[AppContext] Failed to initialize networking");
+      return;
+    }
+
+    // Start discovery
+    NetworkService.startDiscovery();
+
+    // Listen for discovered users
+    NetworkService.onUserDiscovered((user) => {
+      console.log("[AppContext] User discovered:", user.username);
+      handleUserDiscovered(user);
+    });
+
+    // Listen for messages/packets
+    NetworkService.onMessage((packet) => {
+      console.log("[AppContext] Packet received:", packet.type);
+      handleNetworkPacket(packet);
+    });
+
+    // Periodically update online users from discovery
+    const updateInterval = setInterval(() => {
+      const discovered = NetworkService.getDiscoveredUsers();
+      setOnlineUsers(discovered);
+    }, 2000);
+
+    return () => {
+      clearInterval(updateInterval);
+    };
+  };
 
   const loadStoredData = async () => {
     console.log("[AppContext] Loading stored data");

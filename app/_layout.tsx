@@ -19,7 +19,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
@@ -34,3 +34,4 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+export default RootLayout;

@@ -16,6 +16,8 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+android/
+ios/
 
 # Metro
 .metro-health-check*
@@ -30,8 +32,28 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
 *.tsbuildinfo
-.vercel
+
+# Lock files (keeping package-lock.json, ignoring others)
+bun.lock
+yarn.lock
+pnpm-lock.yaml
+
+# Build artifacts
+*.apk
+*.aab
+*.ipa
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Cache
+.cache/

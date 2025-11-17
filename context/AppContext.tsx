@@ -1,7 +1,6 @@
 import createContextHook from "@nkzw/create-context-hook";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import type {
   User,
@@ -19,14 +18,6 @@ const STORAGE_KEYS = {
   FRIEND_REQUESTS: "friendRequests",
 } as const;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
 export const [AppProvider, useApp] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isHost, setIsHost] = useState<boolean>(false);
@@ -38,7 +29,6 @@ export const [AppProvider, useApp] = createContextHook(() => {
 
   useEffect(() => {
     loadStoredData();
-    setupNotifications();
   }, []);
 
   useEffect(() => {
@@ -93,27 +83,8 @@ export const [AppProvider, useApp] = createContextHook(() => {
   };
 
   const setupNotifications = async () => {
-    if (Platform.OS === "web") {
-      console.log("[AppContext] Notifications not available on web");
-      return;
-    }
-
-    try {
-      const { status: existingStatus } =
-        await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      if (finalStatus !== "granted") {
-        console.log("[AppContext] Notification permissions not granted");
-      }
-    } catch (error) {
-      console.error("[AppContext] Failed to setup notifications:", error);
-    }
+    // Notifications disabled - not supported in Expo Go
+    console.log("[AppContext] Notifications disabled");
   };
 
   const handleNetworkPacket = useCallback(
@@ -182,16 +153,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
       JSON.stringify([...friendRequests, request])
     );
 
-    if (Platform.OS !== "web") {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Friend Request",
-          body: `${packet.from.username} wants to connect with you`,
-          data: { requestId: request.id },
-        },
-        trigger: null,
-      });
-    }
+    // Notification disabled - not supported in Expo Go
   };
 
   const handleFriendAccept = async (packet: NetworkPacket) => {
@@ -254,16 +216,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
       return updated;
     });
 
-    if (Platform.OS !== "web") {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: packet.from.username,
-          body: message.type === "text" ? message.content : "Sent a file",
-          data: { fromUid: packet.from.uid },
-        },
-        trigger: null,
-      });
-    }
+    // Notification disabled - not supported in Expo Go
   };
 
   const handleUserOffline = (user: User) => {
@@ -271,15 +224,7 @@ export const [AppProvider, useApp] = createContextHook(() => {
 
     setOnlineUsers((prev) => prev.filter((u) => u.uid !== user.uid));
 
-    if (isHost && Platform.OS !== "web") {
-      Notifications.scheduleNotificationAsync({
-        content: {
-          title: "User Disconnected",
-          body: `${user.username} left the network`,
-        },
-        trigger: null,
-      });
-    }
+    // Notification disabled - not supported in Expo Go
   };
 
   const handleHeartbeat = (user: User) => {

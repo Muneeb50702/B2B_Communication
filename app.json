@@ -1,13 +1,12 @@
 {
   "expo": {
-    "name": "Universal Communication App",
-    "slug": "universal-communication-app-itnt26x",
+    "name": "B2B Communication",
+    "slug": "b2b-communication",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rork-app",
+    "scheme": "b2bcomm",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -15,27 +14,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.universal-communication-app-itnt26x"
+      "bundleIdentifier": "com.b2bcomm.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.universal_communication_app_itnt26x",
+      "package": "com.b2bcomm.app",
       "permissions": [
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
-        "CHANGE_WIFI_STATE",
-        "CHANGE_NETWORK_STATE",
-        "INTERNET",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO",
-        "READ_MEDIA_AUDIO",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM"
       ]
@@ -45,8 +34,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
-      "expo-notifications"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
@@ -56,7 +44,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "72a6c5bc-0e6d-41b8-8164-d23cc220df04"
+        "projectId": "7f55f386-a3b2-4143-bae4-3f0f9c391e47"
       }
     }
   }

@@ -1,9 +1,5 @@
 import { Platform } from "react-native";
-import * as Network from "expo-network";
 import { NETWORK_CONFIG } from "@/constants/network";
-import UDPDiscovery from "./UDPDiscovery";
-import TCPMessaging from "./TCPMessaging";
-import FileTransferService, { FileTransfer } from "./FileTransferService";
 import type {
   User,
   NetworkPacket,
@@ -12,17 +8,14 @@ import type {
 } from "@/types";
 
 type MessageHandler = (packet: NetworkPacket) => void;
-type UserDiscoveredHandler = (user: User) => void;
-type FileTransferHandler = (transfer: FileTransfer) => void;
 
 class NetworkService {
   private currentUser: User | null = null;
   private messageHandlers: Set<MessageHandler> = new Set();
-  private userDiscoveredHandlers: Set<UserDiscoveredHandler> = new Set();
-  private fileTransferHandlers: Set<FileTransferHandler> = new Set();
+  private discoveryInterval: NodeJS.Timeout | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private isHost: boolean = false;
-  private isInitialized: boolean = false;
+  private webSockets: Map<string, WebSocket> = new Map();
 
   async initialize(user: User, isHost: boolean) {
     console.log("[NetworkService] Initializing...", { user, isHost });
@@ -34,8 +27,6 @@ class NetworkService {
     } else {
       await this.initializeNativeMode();
     }
-
-    this.isInitialized = true;
   }
 
   private async initializeWebMode() {
@@ -49,44 +40,21 @@ class NetworkService {
     console.log("[NetworkService] Running in NATIVE mode");
     
     try {
-      // Get device IP address
-      const ipAddress = await Network.getIpAddressAsync();
+      // expo-network removed - not compatible with web
+      const ipAddress = "0.0.0.0"; // Placeholder, would need native module
       console.log("[NetworkService] Device IP:", ipAddress);
 
       if (this.currentUser) {
         this.currentUser.ipAddress = ipAddress;
       }
 
-      // Initialize UDP Discovery
-      await UDPDiscovery.initialize(this.currentUser!);
-      UDPDiscovery.onUserDiscovered((user) => {
-        console.log("[NetworkService] User discovered:", user.username);
-        this.userDiscoveredHandlers.forEach(handler => handler(user));
-      });
-
-      // Initialize TCP Messaging
-      await TCPMessaging.startServer(this.currentUser!);
-      TCPMessaging.onPacket((packet) => {
-        console.log("[NetworkService] Packet received:", packet.type);
-        this.messageHandlers.forEach(handler => handler(packet));
-      });
-
-      // Initialize File Transfer Service
-      await FileTransferService.startServer(this.currentUser!);
-      FileTransferService.onTransferUpdate((transfer) => {
-        console.log("[NetworkService] File transfer update:", transfer.status);
-        this.fileTransferHandlers.forEach(handler => handler(transfer));
-      });
-
-      // Start broadcasting our presence
-      UDPDiscovery.startBroadcasting();
+      console.log("[NetworkService] Native UDP/TCP requires react-native-udp and react-native-tcp-socket");
+      console.log("[NetworkService] These are not available in Expo Go");
+      console.log("[NetworkService] You need to create a development build");
 
       this.startHeartbeat();
-
-      console.log("[NetworkService] Native mode initialized successfully");
     } catch (error) {
       console.error("[NetworkService] Failed to initialize native mode:", error);
-      throw error;
     }
   }
 
@@ -98,93 +66,105 @@ class NetworkService {
     };
   }
 
-  onUserDiscovered(handler: UserDiscoveredHandler) {
-    console.log("[NetworkService] Registering user discovered handler");
-    this.userDiscoveredHandlers.add(handler);
-    return () => {
-      this.userDiscoveredHandlers.delete(handler);
-    };
-  }
-
-  onFileTransfer(handler: FileTransferHandler) {
-    console.log("[NetworkService] Registering file transfer handler");
-    this.fileTransferHandlers.add(handler);
-    return () => {
-      this.fileTransferHandlers.delete(handler);
-    };
+  private notifyHandlers(packet: NetworkPacket) {
+    console.log("[NetworkService] Notifying handlers:", packet.type);
+    this.messageHandlers.forEach((handler) => handler(packet));
   }
 
   sendDiscovery() {
+    if (!this.currentUser) return;
+
+    console.log("[NetworkService] Sending discovery broadcast");
+    
+    const packet: NetworkPacket = {
+      type: "DISCOVERY",
+      from: this.currentUser,
+      data: { isHost: this.isHost },
+      timestamp: Date.now(),
+    };
+
     if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Discovery not available");
-      return;
+      console.log("[NetworkService] Web: Discovery via WebSocket server needed");
+    } else {
+      console.log("[NetworkService] Native: UDP broadcast not available in Expo Go");
     }
-    UDPDiscovery.startBroadcasting();
   }
 
-  async sendFriendRequest(toUser: User) {
+  sendFriendRequest(toUser: User) {
     if (!this.currentUser) return;
 
     console.log("[NetworkService] Sending friend request to:", toUser.username);
 
-    if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Friend request not available");
-      return;
-    }
+    const packet: NetworkPacket = {
+      type: "FRIEND_REQUEST",
+      from: this.currentUser,
+      to: toUser.uid,
+      data: {},
+      timestamp: Date.now(),
+    };
 
-    await TCPMessaging.sendFriendRequest(toUser);
+    this.sendPacket(toUser, packet);
   }
 
-  async acceptFriendRequest(toUser: User) {
+  acceptFriendRequest(toUser: User) {
     if (!this.currentUser) return;
 
     console.log("[NetworkService] Accepting friend request from:", toUser.username);
 
-    if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Friend accept not available");
-      return;
-    }
+    const packet: NetworkPacket = {
+      type: "FRIEND_ACCEPT",
+      from: this.currentUser,
+      to: toUser.uid,
+      data: {},
+      timestamp: Date.now(),
+    };
 
-    await TCPMessaging.acceptFriendRequest(toUser);
+    this.sendPacket(toUser, packet);
   }
 
-  async rejectFriendRequest(toUser: User) {
+  rejectFriendRequest(toUser: User) {
     if (!this.currentUser) return;
 
     console.log("[NetworkService] Rejecting friend request from:", toUser.username);
 
-    if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Friend reject not available");
-      return;
-    }
+    const packet: NetworkPacket = {
+      type: "FRIEND_REJECT",
+      from: this.currentUser,
+      to: toUser.uid,
+      data: {},
+      timestamp: Date.now(),
+    };
 
-    await TCPMessaging.rejectFriendRequest(toUser);
+    this.sendPacket(toUser, packet);
   }
 
-  async sendMessage(toUser: User, message: Message) {
+  sendMessage(toUser: User, message: Message) {
     if (!this.currentUser) return;
 
     console.log("[NetworkService] Sending message to:", toUser.username);
 
-    if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Messaging not available");
-      return;
-    }
+    const packet: NetworkPacket = {
+      type: "MESSAGE",
+      from: this.currentUser,
+      to: toUser.uid,
+      data: { message },
+      timestamp: Date.now(),
+    };
 
-    await TCPMessaging.sendMessage(toUser, message);
+    this.sendPacket(toUser, packet);
   }
 
-  async sendFile(toUser: User, fileUri: string, fileName: string, fileType: string): Promise<string | null> {
-    if (!this.currentUser) return null;
-
-    console.log("[NetworkService] Sending file to:", toUser.username);
-
+  private sendPacket(toUser: User, packet: NetworkPacket) {
     if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: File transfer not available");
-      return null;
+      console.log("[NetworkService] Web: Would send packet via WebSocket:", packet.type);
+      
+      setTimeout(() => {
+        console.log("[NetworkService] Web: Simulating packet sent");
+      }, 100);
+    } else {
+      console.log("[NetworkService] Native: Would send packet via TCP:", packet.type);
+      console.log("[NetworkService] Native: TCP socket requires react-native-tcp-socket");
     }
-
-    return await FileTransferService.sendFile(toUser, fileUri, fileName, fileType);
   }
 
   private startHeartbeat() {
@@ -197,32 +177,37 @@ class NetworkService {
 
       console.log("[NetworkService] Heartbeat");
 
-      if (Platform.OS !== "web") {
-        // Send heartbeat via UDP to keep presence alive
-        UDPDiscovery.broadcastDiscovery();
-      }
+      const packet: NetworkPacket = {
+        type: "HEARTBEAT",
+        from: this.currentUser,
+        data: {},
+        timestamp: Date.now(),
+      };
+
     }, NETWORK_CONFIG.HEARTBEAT_INTERVAL);
   }
 
   startDiscovery() {
     console.log("[NetworkService] Starting discovery broadcasts");
 
-    if (Platform.OS === "web") {
-      console.log("[NetworkService] Web: Discovery not available");
-      return;
+    this.sendDiscovery();
+
+    if (this.discoveryInterval) {
+      clearInterval(this.discoveryInterval);
     }
 
-    UDPDiscovery.startBroadcasting();
+    this.discoveryInterval = setInterval(() => {
+      this.sendDiscovery();
+    }, NETWORK_CONFIG.DISCOVERY_INTERVAL);
   }
 
   stopDiscovery() {
     console.log("[NetworkService] Stopping discovery broadcasts");
 
-    if (Platform.OS === "web") {
-      return;
+    if (this.discoveryInterval) {
+      clearInterval(this.discoveryInterval);
+      this.discoveryInterval = null;
     }
-
-    UDPDiscovery.stopBroadcasting();
   }
 
   shutdown() {
@@ -235,26 +220,21 @@ class NetworkService {
       this.heartbeatInterval = null;
     }
 
-    if (Platform.OS !== "web") {
-      UDPDiscovery.shutdown();
-      TCPMessaging.shutdown();
-      FileTransferService.shutdown();
-    }
+    this.webSockets.forEach((ws) => {
+      ws.close();
+    });
+    this.webSockets.clear();
 
     this.messageHandlers.clear();
-    this.userDiscoveredHandlers.clear();
-    this.fileTransferHandlers.clear();
     this.currentUser = null;
-    this.isInitialized = false;
   }
 
   getConnectionStatus() {
     return {
-      initialized: this.isInitialized,
+      initialized: this.currentUser !== null,
       isHost: this.isHost,
       platform: Platform.OS,
       requiresNativeBuild: Platform.OS !== "web",
-      tcpStatus: Platform.OS !== "web" ? TCPMessaging.getConnectionStatus() : null,
     };
   }
 }

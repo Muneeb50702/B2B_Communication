@@ -8,10 +8,11 @@ import {
   Alert,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { Wifi, User, LogOut, Smartphone } from "lucide-react-native";
+import { Wifi, User, LogOut, Smartphone, Trash2 } from "lucide-react-native";
 import { useApp } from "@/context/AppContext";
 import { theme } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import MessagePersistence from "@/services/MessagePersistence";
 
 export default function SettingsScreen() {
   const { currentUser, isHost, friends } = useApp();
@@ -43,6 +44,29 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error("Failed to logout:", error);
     }
+  };
+
+  const handleClearMessages = () => {
+    Alert.alert(
+      "Clear Message History",
+      "This will delete all chat history. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear All", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await MessagePersistence.clearAllMessages();
+              Alert.alert("Success", "All message history has been cleared");
+            } catch (error) {
+              console.error("Failed to clear messages:", error);
+              Alert.alert("Error", "Failed to clear message history");
+            }
+          }
+        },
+      ]
+    );
   };
 
   return (
@@ -97,6 +121,22 @@ export default function SettingsScreen() {
               <Text style={styles.label}>Friends</Text>
               <Text style={styles.value}>{friends.length}</Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={handleClearMessages}
+              activeOpacity={0.7}
+            >
+              <Trash2 size={20} color={theme.colors.danger} />
+              <Text style={[styles.label, { color: theme.colors.danger }]}>
+                Clear Message History
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

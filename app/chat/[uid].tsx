@@ -10,10 +10,12 @@ import {
   Platform,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { Send, Paperclip } from "lucide-react-native";
+import { Send } from "lucide-react-native";
 import { useApp } from "@/context/AppContext";
 import { theme } from "@/constants/theme";
 import type { Message } from "@/types";
+import FilePickerButton from "@/components/FilePickerButton";
+import FileTransferProgress from "@/components/FileTransferProgress";
 
 export default function ChatScreen() {
   const { uid } = useLocalSearchParams<{ uid: string }>();
@@ -22,12 +24,20 @@ export default function ChatScreen() {
     getConversation,
     sendMessage,
     markConversationAsRead,
+    fileTransfers,
   } = useApp();
 
   const [messageText, setMessageText] = useState<string>("");
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = getConversation(uid as string);
+
+  // Filter transfers for this conversation
+  const conversationTransfers = fileTransfers.filter(
+    (transfer) => 
+      transfer.metadata.toUid === uid || 
+      transfer.metadata.fromUid === uid
+  );
 
   useEffect(() => {
     if (conversation) {
@@ -144,6 +154,19 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
+            ListFooterComponent={
+              conversationTransfers.length > 0 ? (
+                <View style={styles.transfersContainer}>
+                  {conversationTransfers.map((transfer) => (
+                    <FileTransferProgress
+                      key={transfer.id}
+                      transfer={transfer}
+                      isReceiving={transfer.metadata.toUid === currentUser?.uid}
+                    />
+                  ))}
+                </View>
+              ) : null
+            }
             onContentSizeChange={() =>
               flatListRef.current?.scrollToEnd({ animated: false })
             }
@@ -151,9 +174,16 @@ export default function ChatScreen() {
         )}
 
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton} activeOpacity={0.7}>
-            <Paperclip size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
+          {conversation.user && (
+            <FilePickerButton 
+              toUser={conversation.user}
+              onFilePicked={() => {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+              }}
+            />
+          )}
 
           <TextInput
             style={styles.input}
@@ -296,5 +326,9 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     textAlign: "center",
+  },
+  transfersContainer: {
+    marginTop: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
 });

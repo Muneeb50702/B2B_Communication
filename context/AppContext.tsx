@@ -10,6 +10,9 @@ import type {
   NetworkPacket,
 } from "@/types";
 import NetworkService from "@/services/NetworkService";
+import GroupChatService from "@/services/GroupChatService";
+import FileTransferService, { type FileTransfer } from "@/services/FileTransferService";
+import MessagePersistence from "@/services/MessagePersistence";
 
 const STORAGE_KEYS = {
   USER: "user",
@@ -25,6 +28,8 @@ export const [AppProvider, useApp] = createContextHook(() => {
   const [friends, setFriends] = useState<User[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [groupMessages, setGroupMessages] = useState<Message[]>([]);
+  const [fileTransfers, setFileTransfers] = useState<FileTransfer[]>([]);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   useEffect(() => {
@@ -54,6 +59,23 @@ export const [AppProvider, useApp] = createContextHook(() => {
       return;
     }
 
+    // Initialize GroupChatService
+    await GroupChatService.initialize(currentUser);
+
+    // Listen for group messages
+    const unsubscribeGroup = GroupChatService.onMessage((message) => {
+      setGroupMessages(GroupChatService.getMessages());
+    });
+
+    // Listen for file transfer progress
+    const unsubscribeProgress = FileTransferService.onProgress((transfer) => {
+      setFileTransfers(FileTransferService.getAllTransfers());
+    });
+
+    const unsubscribeComplete = FileTransferService.onComplete((transfer) => {
+      setFileTransfers(FileTransferService.getAllTransfers());
+    });
+
     // Start discovery
     NetworkService.startDiscovery();
 
@@ -77,6 +99,11 @@ export const [AppProvider, useApp] = createContextHook(() => {
 
     return () => {
       clearInterval(updateInterval);
+      unsubscribeGroup();
+      unsubscribeProgress();
+      unsubscribeComplete();
+      GroupChatService.shutdown();
+      FileTransferService.shutdown();
     };
   };
 
@@ -221,35 +248,73 @@ export const [AppProvider, useApp] = createContextHook(() => {
     const message = packet.data.message as Message;
     console.log("[AppContext] Message received:", message.id);
 
-    setConversations((prev) => {
-      const existingConvIndex = prev.findIndex(
-        (c) => c.uid === packet.from.uid
-      );
-
-      let updated: Conversation[];
-
-      if (existingConvIndex >= 0) {
-        updated = [...prev];
-        updated[existingConvIndex] = {
-          ...updated[existingConvIndex],
-          messages: [...updated[existingConvIndex].messages, message],
-          lastMessage: message,
-          unreadCount: updated[existingConvIndex].unreadCount + 1,
-        };
-      } else {
-        const newConv: Conversation = {
-          uid: packet.from.uid,
-          user: packet.from,
-          messages: [message],
-          unreadCount: 1,
-          lastMessage: message,
-        };
-        updated = [newConv, ...prev];
+    // Handle file transfer messages
+    if (message.type === 'file') {
+      try {
+        const content = JSON.parse(message.content);
+        if (content.type === 'FILE_METADATA') {
+          await FileTransferService.handleFileMetadata(content.metadata);
+          setFileTransfers(FileTransferService.getAllTransfers());
+        } else if (content.type === 'FILE_CHUNK') {
+          await FileTransferService.handleFileChunk(
+            content.transferId,
+            content.chunkIndex,
+            content.totalChunks,
+            content.data
+          );
+          setFileTransfers(FileTransferService.getAllTransfers());
+        }
+      } catch (error) {
+        console.error('[AppContext] File message parse error:', error);
       }
+      return;
+    }
 
-      AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(updated));
-      return updated;
-    });
+    // Check if it's a group message
+    if (message.toUid === 'GROUP_CHAT' || message.toUid === currentUser?.uid) {
+      GroupChatService.handleIncomingMessage(message);
+      setGroupMessages(GroupChatService.getMessages());
+    }
+
+    // Handle private messages
+    if (message.toUid !== 'GROUP_CHAT') {
+      setConversations((prev) => {
+        const existingConvIndex = prev.findIndex(
+          (c) => c.uid === packet.from.uid
+        );
+
+        let updated: Conversation[];
+
+        if (existingConvIndex >= 0) {
+          updated = [...prev];
+          updated[existingConvIndex] = {
+            ...updated[existingConvIndex],
+            messages: [...updated[existingConvIndex].messages, message],
+            lastMessage: message,
+            unreadCount: updated[existingConvIndex].unreadCount + 1,
+          };
+        } else {
+          const newConv: Conversation = {
+            uid: packet.from.uid,
+            user: packet.from,
+            messages: [message],
+            unreadCount: 1,
+            lastMessage: message,
+          };
+          updated = [newConv, ...prev];
+        }
+
+        AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(updated));
+        
+        // Persist message history for this conversation
+        const conv = updated.find(c => c.uid === packet.from.uid);
+        if (conv) {
+          MessagePersistence.saveChatMessages(conv.uid, conv.messages);
+        }
+        
+        return updated;
+      });
+    }
 
     // Notification disabled - not supported in Expo Go
   };
@@ -381,25 +446,40 @@ export const [AppProvider, useApp] = createContextHook(() => {
       }
 
       AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(updated));
+      
+      // Persist message history
+      const conv = updated.find(c => c.uid === toUid);
+      if (conv) {
+        MessagePersistence.saveChatMessages(toUid, conv.messages);
+      }
+      
       return updated;
     });
 
     NetworkService.sendMessage(friend, message);
 
     setTimeout(() => {
-      setConversations((prev) =>
-        prev.map((conv) => {
+      setConversations((prev) => {
+        const updated = prev.map((conv) => {
           if (conv.uid === toUid) {
             return {
               ...conv,
               messages: conv.messages.map((m) =>
-                m.id === message.id ? { ...m, status: "sent" } : m
+                m.id === message.id ? { ...m, status: "sent" as const } : m
               ),
             };
           }
           return conv;
-        })
-      );
+        });
+        
+        // Persist updated status
+        const conv = updated.find(c => c.uid === toUid);
+        if (conv) {
+          MessagePersistence.saveChatMessages(toUid, conv.messages);
+        }
+        
+        return updated;
+      });
     }, 500);
   };
 
@@ -417,6 +497,25 @@ export const [AppProvider, useApp] = createContextHook(() => {
     return conversations.find((c) => c.uid === uid);
   };
 
+  const sendGroupMessage = async (content: string) => {
+    if (!currentUser) return;
+    
+    const message = await GroupChatService.sendGroupMessage(content);
+    if (message) {
+      setGroupMessages(GroupChatService.getMessages());
+    }
+  };
+
+  const sendFile = async (toUser: User, fileUri: string, filename: string, mimeType: string) => {
+    if (!currentUser) return null;
+    
+    const transferId = await FileTransferService.sendFile(toUser, fileUri, filename, mimeType, currentUser.uid);
+    if (transferId) {
+      setFileTransfers(FileTransferService.getAllTransfers());
+    }
+    return transferId;
+  };
+
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
   }, [conversations]);
@@ -432,6 +531,8 @@ export const [AppProvider, useApp] = createContextHook(() => {
     friends,
     friendRequests,
     conversations,
+    groupMessages,
+    fileTransfers,
     isInitialized,
     totalUnreadCount,
     pendingRequestsCount,
@@ -440,6 +541,8 @@ export const [AppProvider, useApp] = createContextHook(() => {
     acceptFriendRequest,
     rejectFriendRequest,
     sendMessage,
+    sendGroupMessage,
+    sendFile,
     markConversationAsRead,
     getConversation,
   };

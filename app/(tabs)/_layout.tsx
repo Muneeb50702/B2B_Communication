@@ -1,5 +1,5 @@
 import { Tabs, Redirect } from "expo-router";
-import { Users, MessageCircle, Settings } from "lucide-react-native";
+import { Users, MessageCircle, Settings, MessageSquare } from "lucide-react-native";
 import React from "react";
 import { theme } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
@@ -30,6 +30,13 @@ export default function TabLayout() {
           title: "Users",
           tabBarIcon: ({ color }) => <Users size={24} color={color} />,
           tabBarBadge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="group"
+        options={{
+          title: "Group",
+          tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
         }}
       />
       <Tabs.Screen

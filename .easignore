@@ -1,0 +1,8 @@
+# EAS ignore - exclude build artifacts but keep source
+android/build/
+android/.gradle/
+android/app/build/
+*.apk
+*.aab
+node_modules/
+.expo/

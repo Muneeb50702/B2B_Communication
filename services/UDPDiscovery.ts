@@ -56,8 +56,13 @@ class UDPDiscoveryService {
       });
 
       // Enable broadcasting
-      if (this.socket) {
-        this.socket.setBroadcast(true);
+      try {
+        if (this.socket && this.socket._socket) {
+          this.socket.setBroadcast(true);
+          console.log('[UDPDiscovery] Broadcasting enabled');
+        }
+      } catch (error) {
+        console.warn('[UDPDiscovery] Could not enable broadcast:', error);
       }
 
       console.log('[UDPDiscovery] Initialized successfully');

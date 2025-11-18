@@ -41,14 +41,14 @@ class WiFiManagerService {
         PermissionsAndroid.PERMISSIONS.ACCESS_WIFI_STATE,
         PermissionsAndroid.PERMISSIONS.CHANGE_WIFI_STATE,
         PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE,
-      ].filter((p): p is string => typeof p === 'string' && p.length > 0);
+      ].filter((p) => typeof p === 'string' && p.length > 0) as string[];
 
       if (requested.length === 0) {
         console.warn('[WiFiManager] No permissions to request');
         return true;
       }
 
-      const granted = await PermissionsAndroid.requestMultiple(requested);
+      const granted = await PermissionsAndroid.requestMultiple(requested as any);
 
       if (!granted) {
         console.warn('[WiFiManager] Permission result is null');
@@ -136,6 +136,26 @@ class WiFiManagerService {
       }));
     } catch (error) {
       console.error('[WiFiManager] Failed to scan networks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get available WiFi networks (alias for scanNetworks)
+   */
+  async getAvailableNetworks(): Promise<Array<{ssid: string; level: number}>> {
+    try {
+      await this.requestPermissions();
+      const networks = await WifiManager.reScanAndLoadWifiList();
+      
+      console.log('[WiFiManager] Found available networks:', networks.length);
+      
+      return networks.map(network => ({
+        ssid: network.SSID,
+        level: network.level,
+      }));
+    } catch (error) {
+      console.error('[WiFiManager] Failed to get available networks:', error);
       return [];
     }
   }

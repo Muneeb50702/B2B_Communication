@@ -31,5 +31,5 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={hasUser ? "/(tabs)/users" : "/onboarding"} />;
+  return <Redirect href={hasUser ? "/(tabs)/users" : "/onboarding-wifidirect"} />;
 }

@@ -128,7 +128,10 @@ class UDPDiscoveryService {
       broadcastAddress,
       (err?: Error) => {
         if (err) {
-          console.error('[UDPDiscovery] Broadcast failed:', err);
+          // Suppress ENETUNREACH errors - happens when WiFi Direct network is still forming
+          if (!err.message?.includes('ENETUNREACH')) {
+            console.error('[UDPDiscovery] Broadcast failed:', err);
+          }
         }
       }
     );

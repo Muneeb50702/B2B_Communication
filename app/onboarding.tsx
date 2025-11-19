@@ -19,6 +19,7 @@ import * as Location from "expo-location";
 import { useApp } from "@/context/AppContext";
 import { theme } from "@/constants/theme";
 import WiFiManager from "@/services/WiFiManager";
+import WiFiDirectService from "@/services/WiFiDirectService";
 import QRCodeService from "@/services/QRCodeService";
 import QRDisplayModal from "@/components/QRDisplayModal";
 import QRScannerModal from "@/components/QRScannerModal";
@@ -78,10 +79,36 @@ export default function OnboardingScreen() {
       if (!hasPermissions) {
         Alert.alert(
           'Permissions Required',
-          'WiFi and location permissions are needed to create a hotspot.',
+          'WiFi and location permissions are needed to create WiFi Direct network.',
           [
             { text: 'Cancel', onPress: () => setIsProcessing(false) },
             { text: 'Open Settings', onPress: () => openSettings() },
+          ]
+        );
+        return;
+      }
+
+      // Check if WiFi is enabled
+      const wifiEnabled = await WiFiManager.isWifiEnabled();
+      
+      if (!wifiEnabled) {
+        Alert.alert(
+          'Enable WiFi',
+          'Please enable WiFi to create WiFi Direct network.',
+          [
+            { text: 'Cancel', onPress: () => setIsProcessing(false) },
+            {
+              text: 'Enable WiFi',
+              onPress: async () => {
+                const enabled = await WiFiManager.enableWifi();
+                if (enabled) {
+                  await proceedWithHostSetup();
+                } else {
+                  setError('Failed to enable WiFi. Please enable it manually.');
+                  setIsProcessing(false);
+                }
+              },
+            },
           ]
         );
         return;
@@ -96,23 +123,40 @@ export default function OnboardingScreen() {
 
   const proceedWithHostSetup = async () => {
     try {
-      // Generate hotspot credentials
-      const hotspotConfig = await WiFiManager.createHotspot(username.trim());
+      // Initialize WiFi Direct
+      await WiFiDirectService.initialize();
       
-      if (!hotspotConfig) {
-        throw new Error('Failed to generate hotspot credentials');
+      // Try to remove any existing group first
+      try {
+        await WiFiDirectService.removeGroup();
+        console.log('[Onboarding] Removed existing WiFi Direct group');
+      } catch (e) {
+        // Ignore error if no group exists
+        console.log('[Onboarding] No existing group to remove');
+      }
+      
+      // Create WiFi Direct group
+      const groupInfo = await WiFiDirectService.createGroup();
+      
+      if (!groupInfo) {
+        throw new Error('Failed to create WiFi Direct group');
       }
 
-      // Generate QR code
+      console.log('[Onboarding] WiFi Direct group created:', groupInfo);
+
+      // Generate QR code with WiFi Direct info
       const qrInfo: QRData = {
-        type: 'MXB_CONNECT',
-        ssid: hotspotConfig.ssid,
-        password: hotspotConfig.password,
+        type: 'MXB_CONNECT_P2P',
+        ssid: groupInfo.networkName,
+        password: groupInfo.passphrase,
         hostName: username.trim(),
-        version: '1.0',
+        version: '2.0', // P2P version
       };
 
-      const qrString = QRCodeService.generateQRData(hotspotConfig, username.trim());
+      const qrString = QRCodeService.generateQRData({
+        ssid: groupInfo.networkName,
+        password: groupInfo.passphrase
+      }, username.trim());
       
       setQrData(qrString);
       setHotspotInfo(qrInfo);
@@ -124,21 +168,37 @@ export default function OnboardingScreen() {
       
       // Show QR code modal
       Alert.alert(
-        'Hotspot Credentials Generated',
-        `Network: ${hotspotConfig.ssid}\nPassword: ${hotspotConfig.password}\n\nPlease:\n1. Turn OFF WiFi\n2. Enable Hotspot in device settings\n3. Use the credentials above\n4. Show QR code to others`,
+        'WiFi Direct Network Created',
+        `Network: ${groupInfo.networkName}\nPassword: ${groupInfo.passphrase}\n\n✅ WiFi Direct group created automatically!\nShow QR code to others to join.`,
         [
           {
             text: 'Show QR Code',
             onPress: () => setShowQRDisplay(true),
           },
           {
-            text: 'Skip',
+            text: 'Continue',
             onPress: () => router.replace("/(tabs)/users"),
           },
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Onboarding] Proceed with host setup error:', error);
+      setIsProcessing(false);
+      
+      // Better error messages
+      let errorMessage = 'Failed to create WiFi Direct network.';
+      
+      if (error.message?.includes('busy')) {
+        errorMessage = 'WiFi Direct is busy. Please:\n1. Turn OFF mobile hotspot\n2. Disconnect from any WiFi networks\n3. Try again';
+      } else if (error.message?.includes('unsupported')) {
+        errorMessage = 'WiFi Direct is not supported on this device.';
+      }
+      
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
       throw error;
     }
   };

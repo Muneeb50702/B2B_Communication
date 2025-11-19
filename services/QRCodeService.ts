@@ -1,7 +1,7 @@
 import type { HotspotConfig } from './WiFiManager';
 
 export interface QRData {
-  type: 'MXB_CONNECT';
+  type: 'MXB_CONNECT' | 'MXB_CONNECT_P2P';
   ssid: string;
   password: string;
   hostName: string;
@@ -10,15 +10,15 @@ export interface QRData {
 
 class QRCodeService {
   /**
-   * Generate QR data from hotspot config
+   * Generate QR data from hotspot config or WiFi Direct
    */
   generateQRData(config: HotspotConfig, hostName: string): string {
     const data: QRData = {
-      type: 'MXB_CONNECT',
+      type: 'MXB_CONNECT_P2P', // Default to P2P
       ssid: config.ssid,
       password: config.password,
       hostName,
-      version: '1.0',
+      version: '2.0',
     };
 
     return JSON.stringify(data);
@@ -31,7 +31,7 @@ class QRCodeService {
     try {
       const data = JSON.parse(qrString) as QRData;
 
-      if (data.type !== 'MXB_CONNECT') {
+      if (data.type !== 'MXB_CONNECT' && data.type !== 'MXB_CONNECT_P2P') {
         console.warn('[QRCode] Invalid QR code type:', data.type);
         return null;
       }
@@ -55,7 +55,7 @@ class QRCodeService {
     return (
       data &&
       typeof data === 'object' &&
-      data.type === 'MXB_CONNECT' &&
+      (data.type === 'MXB_CONNECT' || data.type === 'MXB_CONNECT_P2P') &&
       typeof data.ssid === 'string' &&
       typeof data.password === 'string' &&
       typeof data.hostName === 'string'

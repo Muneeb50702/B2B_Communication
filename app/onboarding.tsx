@@ -255,12 +255,15 @@ export default function OnboardingScreen() {
 
   const proceedWithClientSetup = async () => {
     try {
+      // Initialize WiFi Direct
+      await WiFiDirectService.initialize();
+      
       // Setup user
       await setupUser(username.trim(), false);
       
       setIsProcessing(false);
       
-      // Show options: scan QR or browse networks
+      // Show options: scan QR or browse WiFi Direct networks
       Alert.alert(
         'Join Network',
         'How would you like to connect?',
@@ -271,7 +274,7 @@ export default function OnboardingScreen() {
           },
           {
             text: 'Browse Networks',
-            onPress: () => showAvailableNetworks(),
+            onPress: () => discoverWiFiDirectPeers(),
           },
         ]
       );
@@ -281,28 +284,189 @@ export default function OnboardingScreen() {
     }
   };
 
+  const discoverWiFiDirectPeers = async () => {
+    try {
+      setIsProcessing(true);
+      
+      console.log('[Onboarding] Starting WiFi Direct peer discovery...');
+      
+      // Start discovering peers
+      await WiFiDirectService.discoverPeers();
+      
+      // Listen for discovered peers
+      const peers: any[] = [];
+      
+      WiFiDirectService.onPeersChanged((discoveredPeers) => {
+        console.log('[Onboarding] Peers discovered:', discoveredPeers);
+        peers.push(...discoveredPeers);
+      });
+      
+      // Wait 10 seconds for discovery
+      setTimeout(() => {
+        WiFiDirectService.stopPeerDiscovery();
+        setIsProcessing(false);
+        
+        if (peers.length === 0) {
+          Alert.alert(
+            'No Networks Found',
+            'No WiFi Direct networks found nearby. Please:\n1. Make sure host has created network\n2. Try scanning QR code instead',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Show available peers
+        showPeersList(peers);
+      }, 10000);
+      
+      // Show discovery in progress
+      Alert.alert(
+        'Discovering Networks',
+        'Searching for WiFi Direct networks nearby...\nThis will take about 10 seconds.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => {
+              WiFiDirectService.stopPeerDiscovery();
+              setIsProcessing(false);
+            }
+          }
+        ]
+      );
+      
+    } catch (error) {
+      console.error('[Onboarding] WiFi Direct discovery error:', error);
+      setIsProcessing(false);
+      Alert.alert(
+        'Error',
+        'Failed to discover networks. Please try scanning QR code instead.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const showPeersList = (peers: any[]) => {
+    // Filter out duplicates by device address
+    const uniquePeers = peers.filter((peer, index, self) =>
+      index === self.findIndex((p) => p.deviceAddress === peer.deviceAddress)
+    );
+    
+    if (uniquePeers.length === 0) {
+      Alert.alert(
+        'No Networks Found',
+        'No WiFi Direct networks found. Try scanning QR code.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    Alert.alert(
+      'Available Networks',
+      `Found ${uniquePeers.length} network(s). Select one to connect:`,
+      [
+        ...uniquePeers.map(peer => ({
+          text: `${peer.deviceName} (${peer.status === 0 ? 'Available' : 'Busy'})`,
+          onPress: () => connectToWiFiDirectPeer(peer.deviceAddress),
+        })),
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const connectToWiFiDirectPeer = async (deviceAddress: string) => {
+    try {
+      setIsProcessing(true);
+      
+      console.log('[Onboarding] Connecting to peer:', deviceAddress);
+      
+      // Listen for connection changes
+      WiFiDirectService.onConnectionChanged(async (info) => {
+        if (info.connected) {
+          console.log('[Onboarding] Connected to WiFi Direct network!');
+          
+          setIsProcessing(false);
+          
+          Alert.alert(
+            'Connected',
+            'Successfully connected to WiFi Direct network!',
+            [{ text: 'OK', onPress: () => router.replace("/(tabs)/users") }]
+          );
+        }
+      });
+      
+      // Initiate connection
+      await WiFiDirectService.connect(deviceAddress);
+      
+      // Show connection prompt
+      Alert.alert(
+        'Connection Requested',
+        'Connection request sent. Waiting for host to accept...',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => {
+              setIsProcessing(false);
+            }
+          }
+        ]
+      );
+      
+    } catch (error) {
+      console.error('[Onboarding] WiFi Direct connection error:', error);
+      setIsProcessing(false);
+      Alert.alert(
+        'Connection Failed',
+        'Failed to connect to network. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   const handleQRScan = async (data: QRData) => {
     try {
-      console.log('[Onboarding] Connecting to network:', data.ssid);
+      console.log('[Onboarding] QR scanned, type:', data.type);
       
-      // Attempt to connect
-      const connected = await WiFiManager.connectToNetwork(data.ssid, data.password);
-      
-      if (connected) {
+      if (data.type === 'MXB_CONNECT_P2P') {
+        // WiFi Direct connection - we need to discover and connect
+        console.log('[Onboarding] WiFi Direct QR code detected');
+        
         Alert.alert(
-          'Connected',
-          `Successfully connected to ${data.ssid}`,
-          [{ text: 'OK', onPress: () => router.replace("/(tabs)/users") }]
-        );
-      } else {
-        Alert.alert(
-          'Connection Failed',
-          'Could not connect to the network. Please check the QR code and try again.',
+          'WiFi Direct Network',
+          'This is a WiFi Direct network. The app will search for the network and connect automatically.',
           [
-            { text: 'Scan Again', onPress: () => setShowQRScanner(true) },
-            { text: 'Cancel', onPress: () => router.replace("/(tabs)/users") },
+            {
+              text: 'OK',
+              onPress: async () => {
+                setShowQRScanner(false);
+                // Start discovery to find the host
+                await discoverWiFiDirectPeers();
+              }
+            }
           ]
         );
+        
+      } else {
+        // Legacy hotspot connection
+        console.log('[Onboarding] Legacy hotspot connection to:', data.ssid);
+        
+        const connected = await WiFiManager.connectToNetwork(data.ssid, data.password);
+        
+        if (connected) {
+          Alert.alert(
+            'Connected',
+            `Successfully connected to ${data.ssid}`,
+            [{ text: 'OK', onPress: () => router.replace("/(tabs)/users") }]
+          );
+        } else {
+          Alert.alert(
+            'Connection Failed',
+            'Could not connect to the network. Please check the QR code and try again.',
+            [
+              { text: 'Scan Again', onPress: () => setShowQRScanner(true) },
+              { text: 'Cancel', onPress: () => router.replace("/(tabs)/users") },
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('[Onboarding] QR scan connection error:', error);

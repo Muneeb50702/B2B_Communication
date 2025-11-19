@@ -20,6 +20,7 @@ import { useApp } from "@/context/AppContext";
 import { theme } from "@/constants/theme";
 import WiFiManager from "@/services/WiFiManager";
 import WiFiDirectService from "@/services/WiFiDirectService";
+import MeshCoordinator from "@/services/mesh/MeshCoordinator";
 import QRCodeService from "@/services/QRCodeService";
 import QRDisplayModal from "@/components/QRDisplayModal";
 import QRScannerModal from "@/components/QRScannerModal";
@@ -123,28 +124,26 @@ export default function OnboardingScreen() {
 
   const proceedWithHostSetup = async () => {
     try {
-      // Initialize WiFi Direct
-      await WiFiDirectService.initialize();
+      // Initialize Mesh Network as HOST
+      console.log('[Onboarding] Initializing mesh network as host...');
       
-      // Try to remove any existing group first
-      try {
-        await WiFiDirectService.removeGroup();
-        console.log('[Onboarding] Removed existing WiFi Direct group');
-        // Wait a bit for group to be fully removed
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {
-        // Ignore error if no group exists
-        console.log('[Onboarding] No existing group to remove');
-      }
-      
-      // Create WiFi Direct group
-      const groupInfo = await WiFiDirectService.createGroup();
-      
-      if (!groupInfo || typeof groupInfo !== 'object' || !groupInfo.networkName) {
-        throw new Error('Failed to create WiFi Direct group - invalid response');
-      }
+      await MeshCoordinator.initialize({
+        deviceName: username.trim(),
+        maxClientsPerHost: 7,
+        hostMeshConnections: 2,
+        discoveryInterval: 15000,
+        autoElection: true,
+      });
 
-      console.log('[Onboarding] WiFi Direct group created:', groupInfo);
+      // Listen for when host is ready
+      const hostReadyPromise = new Promise<any>((resolve) => {
+        MeshCoordinator.once('hostReady', resolve);
+      });
+
+      // Wait for host to be ready (this happens after role election)
+      const groupInfo = await hostReadyPromise;
+      
+      console.log('[Onboarding] Mesh host ready:', groupInfo);
 
       // Generate QR code with WiFi Direct info
       const qrInfo: QRData = {
@@ -170,8 +169,8 @@ export default function OnboardingScreen() {
       
       // Show QR code modal
       Alert.alert(
-        'WiFi Direct Network Created',
-        `Network: ${groupInfo.networkName}\nPassword: ${groupInfo.passphrase}\n\n✅ WiFi Direct group created automatically!\nShow QR code to others to join.`,
+        'Mesh Network Host Created',
+        `Network: ${groupInfo.networkName}\nPassword: ${groupInfo.passphrase}\n\n✅ Mesh host ready!\n📡 Auto-discovering peers...\nShow QR code to others to join.`,
         [
           {
             text: 'Show QR Code',
@@ -184,11 +183,11 @@ export default function OnboardingScreen() {
         ]
       );
     } catch (error: any) {
-      console.error('[Onboarding] Proceed with host setup error:', error);
+      console.error('[Onboarding] Mesh host setup error:', error);
       setIsProcessing(false);
       
       // Better error messages
-      let errorMessage = 'Failed to create WiFi Direct network.';
+      let errorMessage = 'Failed to create mesh network host.';
       
       if (error.message?.includes('busy')) {
         errorMessage = 'WiFi Direct is busy. Please:\n1. Turn OFF mobile hotspot\n2. Disconnect from any WiFi networks\n3. Try again';
@@ -257,31 +256,84 @@ export default function OnboardingScreen() {
 
   const proceedWithClientSetup = async () => {
     try {
-      // Initialize WiFi Direct
-      await WiFiDirectService.initialize();
+      // Initialize Mesh Network as CLIENT (with auto-election)
+      console.log('[Onboarding] Initializing mesh network as client...');
+      
+      await MeshCoordinator.initialize({
+        deviceName: username.trim(),
+        maxClientsPerHost: 7,
+        hostMeshConnections: 2,
+        discoveryInterval: 15000,
+        autoElection: true, // Will auto-promote to host if needed
+      });
+
+      // Listen for role changes
+      MeshCoordinator.on('roleChanged', ({ role, reason }) => {
+        console.log('[Onboarding] Role changed:', role, reason);
+        Alert.alert(
+          'Role Updated',
+          `Your device is now: ${role.toUpperCase()}\nReason: ${reason}`
+        );
+      });
+
+      // Listen for successful client connection
+      MeshCoordinator.once('clientConnected', ({ hostId }) => {
+        console.log('[Onboarding] Connected to mesh host:', hostId);
+        Alert.alert(
+          'Connected!',
+          `✅ Connected to mesh network!\n🕸️ You are now part of the mesh.`,
+          [
+            {
+              text: 'Continue',
+              onPress: () => router.replace("/(tabs)/users"),
+            },
+          ]
+        );
+      });
+
+      // Listen for if we become host instead
+      MeshCoordinator.once('hostReady', (groupInfo) => {
+        console.log('[Onboarding] Promoted to mesh host:', groupInfo);
+        Alert.alert(
+          'Now Hosting!',
+          `📡 No hosts available - you became a host!\nNetwork: ${groupInfo.networkName}`,
+          [
+            {
+              text: 'Continue',
+              onPress: () => router.replace("/(tabs)/users"),
+            },
+          ]
+        );
+      });
       
       // Setup user
       await setupUser(username.trim(), false);
       
       setIsProcessing(false);
       
-      // Show options: scan QR or browse WiFi Direct networks
+      // Show options: scan QR or let auto-discovery work
       Alert.alert(
-        'Join Network',
-        'How would you like to connect?',
+        'Join Mesh Network',
+        '🕸️ Auto-discovery active!\nSearching for available hosts...\n\nOr scan QR code to join directly.',
         [
           {
             text: 'Scan QR Code',
             onPress: () => setShowQRScanner(true),
           },
           {
-            text: 'Browse Networks',
-            onPress: () => discoverWiFiDirectPeers(),
+            text: 'Wait for Discovery',
+            onPress: () => {
+              Alert.alert(
+                'Discovering...',
+                '📡 Scanning for mesh hosts...\nYou will be notified when connected.',
+                [{ text: 'OK', onPress: () => router.replace("/(tabs)/users") }]
+              );
+            },
           },
         ]
       );
     } catch (error) {
-      console.error('[Onboarding] Proceed with client setup error:', error);
+      console.error('[Onboarding] Mesh client setup error:', error);
       throw error;
     }
   };

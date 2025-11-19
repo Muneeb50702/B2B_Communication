@@ -130,6 +130,8 @@ export default function OnboardingScreen() {
       try {
         await WiFiDirectService.removeGroup();
         console.log('[Onboarding] Removed existing WiFi Direct group');
+        // Wait a bit for group to be fully removed
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (e) {
         // Ignore error if no group exists
         console.log('[Onboarding] No existing group to remove');
@@ -138,8 +140,8 @@ export default function OnboardingScreen() {
       // Create WiFi Direct group
       const groupInfo = await WiFiDirectService.createGroup();
       
-      if (!groupInfo) {
-        throw new Error('Failed to create WiFi Direct group');
+      if (!groupInfo || typeof groupInfo !== 'object' || !groupInfo.networkName) {
+        throw new Error('Failed to create WiFi Direct group - invalid response');
       }
 
       console.log('[Onboarding] WiFi Direct group created:', groupInfo);

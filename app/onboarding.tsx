@@ -115,6 +115,28 @@ export default function OnboardingScreen() {
         return;
       }
 
+      // Check if mobile hotspot is enabled
+      await WiFiDirectService.initialize();
+      const hotspotEnabled = await WiFiDirectService.isHotspotEnabled();
+      
+      if (hotspotEnabled) {
+        Alert.alert(
+          'Turn OFF Mobile Hotspot',
+          'WiFi Direct cannot work when mobile hotspot is enabled. Please turn it off in your device settings.',
+          [
+            { text: 'Cancel', onPress: () => setIsProcessing(false) },
+            { 
+              text: 'Open Settings', 
+              onPress: () => {
+                openSettings();
+                setIsProcessing(false);
+              }
+            },
+          ]
+        );
+        return;
+      }
+
       await proceedWithHostSetup();
     } catch (error) {
       console.error('[Onboarding] Host setup error:', error);
@@ -250,6 +272,28 @@ export default function OnboardingScreen() {
                   setIsProcessing(false);
                 }
               },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Check if mobile hotspot is enabled
+      await WiFiDirectService.initialize();
+      const hotspotEnabled = await WiFiDirectService.isHotspotEnabled();
+      
+      if (hotspotEnabled) {
+        Alert.alert(
+          'Turn OFF Mobile Hotspot',
+          'WiFi Direct cannot work when mobile hotspot is enabled. Please turn it off in your device settings.',
+          [
+            { text: 'Cancel', onPress: () => setIsProcessing(false) },
+            { 
+              text: 'Open Settings', 
+              onPress: () => {
+                openSettings();
+                setIsProcessing(false);
+              }
             },
           ]
         );

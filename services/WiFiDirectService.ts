@@ -133,6 +133,20 @@ class WiFiDirectService {
   }
 
   /**
+   * Check if hotspot is currently enabled
+   */
+  async isHotspotEnabled(): Promise<boolean> {
+    try {
+      const enabled = await WiFiDirectModule.isHotspotEnabled();
+      console.log('[WiFiDirect] Hotspot enabled:', enabled);
+      return enabled;
+    } catch (error) {
+      console.error('[WiFiDirect] Failed to check hotspot status:', error);
+      return false;
+    }
+  }
+
+  /**
    * Listen for WiFi P2P state changes
    */
   onStateChanged(callback: (enabled: boolean) => void): () => void {

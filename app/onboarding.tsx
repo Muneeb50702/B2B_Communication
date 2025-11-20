@@ -135,12 +135,19 @@ export default function OnboardingScreen() {
         autoElection: true,
       });
 
-      // Listen for when host is ready
-      const hostReadyPromise = new Promise<any>((resolve) => {
-        MeshCoordinator.once('hostReady', resolve);
+      // Listen for when host is ready (with timeout)
+      const hostReadyPromise = new Promise<any>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Host setup timeout - taking too long'));
+        }, 30000); // 30 second timeout
+        
+        MeshCoordinator.once('hostReady', (groupInfo) => {
+          clearTimeout(timeout);
+          resolve(groupInfo);
+        });
       });
 
-      // Wait for host to be ready (this happens after role election)
+      // Wait for host to be ready
       const groupInfo = await hostReadyPromise;
       
       console.log('[Onboarding] Mesh host ready:', groupInfo);
@@ -193,6 +200,8 @@ export default function OnboardingScreen() {
         errorMessage = 'WiFi Direct is busy. Please:\n1. Turn OFF mobile hotspot\n2. Disconnect from any WiFi networks\n3. Try again';
       } else if (error.message?.includes('unsupported')) {
         errorMessage = 'WiFi Direct is not supported on this device.';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Host setup is taking longer than expected. This may be normal - try continuing anyway.';
       }
       
       Alert.alert(

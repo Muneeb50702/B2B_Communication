@@ -51,7 +51,16 @@ export const [AppProvider, useApp] = createContextHook(() => {
 
     console.log("[AppContext] Initializing networking...");
     
-    // Initialize NetworkService
+    // Skip NetworkService initialization when using MeshCoordinator
+    // MeshCoordinator is initialized directly in onboarding flow
+    const useMeshNetworking = true; // TODO: Make this configurable
+    
+    if (useMeshNetworking) {
+      console.log("[AppContext] Using MeshCoordinator - skipping legacy NetworkService");
+      return;
+    }
+    
+    // Initialize NetworkService (legacy mode)
     const success = await NetworkService.initialize(currentUser, isHost);
     
     if (!success) {

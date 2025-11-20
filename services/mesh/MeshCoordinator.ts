@@ -45,6 +45,14 @@ class MeshCoordinator extends EventEmitter {
    * Initialize mesh network
    */
   async initialize(config: Partial<MeshConfig>): Promise<void> {
+    // Prevent multiple initializations
+    if (this.isInitialized) {
+      console.log('[MeshCoordinator] Already initialized, cleaning up first...');
+      await this.shutdown();
+      // Wait a bit for cleanup
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     this.config = { ...this.config, ...config };
     console.log('[MeshCoordinator] Initializing mesh network...', this.config);
 
@@ -63,9 +71,11 @@ class MeshCoordinator extends EventEmitter {
     this.isInitialized = true;
     this.emit('initialized', this.config);
 
-    // Start auto-discovery
+    // Start auto-discovery after a delay to avoid "Framework busy"
     if (this.config.autoElection) {
-      this.startAutoDiscovery();
+      setTimeout(() => {
+        this.startAutoDiscovery();
+      }, 2000); // Wait 2 seconds before first discovery
     }
   }
 
@@ -84,8 +94,11 @@ class MeshCoordinator extends EventEmitter {
         setTimeout(() => {
           this.performRoleElection();
         }, 5000);
-      } catch (error) {
-        console.error('[MeshCoordinator] Discovery error:', error);
+      } catch (error: any) {
+        // Suppress "Framework busy" - expected when group already exists
+        if (!error?.message?.includes('busy')) {
+          console.error('[MeshCoordinator] Discovery error:', error);
+        }
       }
     }, this.config.discoveryInterval);
   }
